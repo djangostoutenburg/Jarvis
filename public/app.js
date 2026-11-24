@@ -477,6 +477,7 @@
         }),
         signal: currentRequest.signal,
       });
+      if (res.status === 401) { location.href = "/login"; return; }
       if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
       const reader = res.body.getReader();
       const dec = new TextDecoder();
@@ -529,6 +530,7 @@
   async function checkServer() {
     try {
       const r = await fetch("/api/status", { cache: "no-store" });
+      if (r.status === 401) { location.href = "/login"; return; }
       const j = await r.json();
       state.aiAvailable = !!j.ai;
       if (j.userName) state.userName = j.userName;

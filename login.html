@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>J.A.R.V.I.S. — Toegang</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600&display=swap">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background: radial-gradient(ellipse at center, #06202e 0%, #02070d 70%);
+      color: #cdf7ff; font-family: "Rajdhani", system-ui, sans-serif;
+      display: grid; place-items: center; padding: 16px;
+    }
+    body::before {
+      content: ""; position: fixed; inset: 0; pointer-events: none;
+      background-image: linear-gradient(rgba(62,233,255,.07) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(62,233,255,.07) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: radial-gradient(ellipse at center, black 20%, transparent 70%);
+    }
+    .card { position: relative; width: min(400px, 100%); text-align: center; }
+    .ring {
+      width: 120px; height: 120px; margin: 0 auto 26px; border-radius: 50%;
+      border: 2px solid #3ee9ff; position: relative;
+      box-shadow: 0 0 30px rgba(62,233,255,.4), inset 0 0 30px rgba(62,233,255,.3);
+    }
+    .ring::before {
+      content: ""; position: absolute; inset: 12px; border-radius: 50%;
+      border: 6px dashed rgba(62,233,255,.7); animation: spin 8s linear infinite;
+    }
+    .ring::after {
+      content: ""; position: absolute; inset: 40px; border-radius: 50%;
+      background: radial-gradient(circle, #fff 0%, #3ee9ff 45%, transparent 75%);
+      animation: glow 2.4s ease-in-out infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes glow { 50% { opacity: .6; transform: scale(.9); } }
+    h1 {
+      font-family: "Orbitron", sans-serif; font-weight: 800; letter-spacing: .25em;
+      color: #3ee9ff; text-shadow: 0 0 16px rgba(62,233,255,.6); font-size: clamp(26px, 7vw, 36px);
+    }
+    .sub { font-size: 12px; letter-spacing: .3em; opacity: .6; margin: 8px 0 30px; text-transform: uppercase; }
+    label { display: block; text-align: left; font-family: "Orbitron", sans-serif; font-size: 11px; letter-spacing: .3em; color: #ffb547; margin-bottom: 8px; }
+    input {
+      width: 100%; background: rgba(4,22,34,.75); border: 1px solid rgba(62,233,255,.35);
+      color: #cdf7ff; font: inherit; font-size: 18px; padding: 13px 14px; outline: none; letter-spacing: .15em;
+    }
+    input:focus { border-color: #3ee9ff; box-shadow: 0 0 14px rgba(62,233,255,.35); }
+    button {
+      margin-top: 18px; width: 100%; font-family: "Orbitron", sans-serif; font-size: 14px; letter-spacing: .25em;
+      color: #3ee9ff; background: rgba(62,233,255,.08); border: 1px solid #3ee9ff; padding: 14px; cursor: pointer;
+      clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    }
+    button:hover { background: rgba(62,233,255,.2); box-shadow: 0 0 20px rgba(62,233,255,.35); }
+    .err { color: #ff4d5e; margin-top: 16px; font-size: 15px; letter-spacing: .05em; }
+  </style>
+</head>
+<body>
+  <form class="card" method="post" action="/login">
+    <div class="ring"></div>
+    <h1>J.A.R.V.I.S.</h1>
+    <div class="sub">Identificatie vereist</div>
+    <label for="pw">WACHTWOORD</label>
+    <input id="pw" name="password" type="password" autocomplete="current-password" autofocus required>
+    <button type="submit">TOEGANG AANVRAGEN</button>
+    {{MESSAGE}}
+  </form>
+</body>
+</html>

@@ -32,6 +32,7 @@ en kan met Claude als "brein" over van alles een gesprek voeren en actuele infor
    ```
    ANTHROPIC_API_KEY=sk-ant-...
    JARVIS_USER_NAME=meneer
+   JARVIS_PASSWORD=een-sterk-wachtwoord
    ```
    Met `JARVIS_USER_NAME` bepaal je hoe Jarvis jou aanspreekt (bijv. `Django` of `baas`).
 6. Start Jarvis:
@@ -43,6 +44,34 @@ en kan met Claude als "brein" over van alles een gesprek voeren en actuele infor
 
 > Zonder API-sleutel start Jarvis in *basismodus*: de ingebouwde opdrachten werken dan wel,
 > vrije gesprekken niet.
+
+## Online zetten met eigen URL en wachtwoord
+
+Zo zet je Jarvis gratis online op [Render](https://render.com). Je krijgt dan een eigen
+https-adres zoals `https://jarvis-xxxx.onrender.com`, beveiligd met een wachtwoord.
+
+1. Maak een gratis account op <https://render.com> en log in met GitHub.
+2. Klik op **New +** → **Blueprint**.
+3. Kies de repository **Jarvis** (en, als dat gevraagd wordt, de branch met deze code).
+   Render leest het bestand `render.yaml` en stelt alles zelf in.
+4. Render vraagt om twee waarden:
+   - `ANTHROPIC_API_KEY`: je API-sleutel
+   - `JARVIS_PASSWORD`: het wachtwoord dat je wilt gebruiken om in te loggen
+     (kies een sterk wachtwoord, minstens 12 tekens)
+5. Klik op **Apply**. Na een paar minuten staat Jarvis online; de URL staat bovenaan in Render.
+
+Open de URL in Chrome of Edge en log in. Je blijft 30 dagen ingelogd op dat apparaat;
+uitloggen kan met de ⏻-knop rechtsboven.
+
+**Goed om te weten**
+- Het wachtwoord wijzigen doe je in Render onder **Environment** → `JARVIS_PASSWORD`.
+  Daarna is iedereen automatisch uitgelogd.
+- Na 5 foute pogingen wordt inloggen vanaf dat adres 15 minuten geblokkeerd.
+- Het gratis abonnement van Render "slaapt" na 15 minuten zonder gebruik; het eerste
+  bezoek daarna duurt ongeveer een halve minuut. Met een betaald abonnement (vanaf ca. $7 p/m)
+  blijft hij altijd wakker.
+- De microfoon werkt alleen via https, dus dat zit met Render goed. Je kunt het ook op je
+  telefoon gebruiken (Chrome op Android werkt het best).
 
 ## Bediening
 
@@ -70,6 +99,8 @@ doorgaans maar een fractie van een cent per vraag (webzoekopdrachten kosten iets
 
 ## Bestanden
 
-- `server.js` — kleine lokale server; praat met Claude en houdt je API-sleutel buiten de browser.
+- `server.js` — kleine server: inloggen, praten met Claude, en je API-sleutel buiten de browser houden.
+- `login.html` — het inlogscherm.
+- `render.yaml` — instellingen voor online zetten op Render.
 - `public/index.html`, `public/style.css` — de HUD-interface.
 - `public/app.js` — spraakherkenning, spraak, opdrachten, weer, systeempanelen en de reactor-animatie.

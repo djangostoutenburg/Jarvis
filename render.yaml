@@ -1,0 +1,18 @@
+# Blueprint voor Render.com — maakt een gratis webservice met https-URL.
+services:
+  - type: web
+    name: jarvis
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false   # wordt bij het aanmaken gevraagd
+      - key: JARVIS_PASSWORD
+        sync: false   # kies hier je inlogwachtwoord
+      - key: JARVIS_USER_NAME
+        value: meneer
+      - key: NODE_VERSION
+        value: "22"
