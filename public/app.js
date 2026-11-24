@@ -26,9 +26,9 @@
     history: store.get("history", []),
     wakeEnabled: store.get("wake", true),
     soundEnabled: store.get("sound", true),
-    rate: store.get("rate", 1),
-    pitch: store.get("pitch", 0.9),
-    voiceName: store.get("voice", null),
+    rate: store.get("rate2", 0.95),
+    pitch: store.get("pitch2", 0.78),
+    voiceName: store.get("voice2", null),
     awaitingCommand: false,  // na "Jarvis" wachten op een opdracht
     location: null,          // { lat, lon, name }
     level: 0,                // audioniveau voor de reactor (0..1)
@@ -122,13 +122,16 @@
       sel.value = state.voiceName;
       return;
     }
-    // Voorkeur: natuurlijk klinkende mannelijke Nederlandse stemmen
-    const prefs = [/maarten/i, /arnaud/i, /frank/i, /online.*natural/i, /google.*nederlands/i, /nl-NL/i];
-    for (const p of prefs) {
-      const v = nl.find((x) => p.test(x.name) || p.test(x.lang));
+    // Voorkeur: een kalme, mannelijke Nederlandse butlerstem.
+    // Xander = iPhone/Mac, Maarten/Arnaud = Edge/Windows, Frank = oudere Windows.
+    const male = [/xander.*(premium|enhanced|verbeterd)/i, /maarten.*natural/i, /xander/i, /maarten/i, /arnaud/i, /frank/i, /google.*nederlands/i];
+    const female = /claire|ellen|colette|fenna|hanna|dena|lotte|laura|anouk|femke|sara|eva|ilse/i;
+    for (const p of male) {
+      const v = nl.find((x) => p.test(x.name));
       if (v) { sel.value = v.name; state.voiceName = v.name; return; }
     }
-    if (nl[0]) { sel.value = nl[0].name; state.voiceName = nl[0].name; }
+    const v = nl.find((x) => /nl-NL/i.test(x.lang) && !female.test(x.name)) || nl.find((x) => !female.test(x.name)) || nl[0];
+    if (v) { sel.value = v.name; state.voiceName = v.name; }
   }
   if (synth) {
     pickVoice();
@@ -149,7 +152,7 @@
     const u = new SpeechSynthesisUtterance(t);
     u.lang = "nl-NL";
     const v = voices.find((x) => x.name === state.voiceName);
-    if (v) { u.voice = v; u.lang = v.lang; }
+    if (v) { try { u.voice = v; u.lang = v.lang; } catch { /* stem niet bruikbaar */ } }
     u.rate = state.rate; u.pitch = state.pitch;
     speakQueue++;
     stopRecognition();
@@ -231,7 +234,7 @@
     if (dict) { initDictation(); return; }
     if (state.serverMode === "artifact") {
       addLog("system", "Spraakherkenning werkt hier niet. Op een computer in Chrome of Edge (of de Claude-desktopapp) kun je wel praten. Typ je opdrachten hieronder.");
-      transcriptEl.textContent = "Praten werkt niet op dit apparaat. Typ je opdracht hieronder.";
+      transcriptEl.textContent = "Tik op de microfoon en spreek via het 🎤 van je toetsenbord.";
       return;
     }
     if (!SR) {
@@ -338,6 +341,12 @@
 
   function toggleMic() {
     ensureAudio();
+    if (!dict && !rec) {
+      // Geen spraakherkenning op dit apparaat: gebruik dicteren van het toetsenbord.
+      $("text-input").focus();
+      transcriptEl.textContent = "Tik op de 🎤 van je toetsenbord en spreek je vraag in.";
+      return;
+    }
     if (state.mode === "speaking" || state.mode === "thinking") {
       stopSpeaking();
       streaming = false;
@@ -956,9 +965,9 @@
     $("rate").value = state.rate;
     $("pitch").value = state.pitch;
     $("settings-btn").onclick = () => $("settings").showModal();
-    $("voice-select").onchange = (e) => { state.voiceName = e.target.value; store.set("voice", state.voiceName); };
-    $("rate").oninput = (e) => { state.rate = +e.target.value; store.set("rate", state.rate); };
-    $("pitch").oninput = (e) => { state.pitch = +e.target.value; store.set("pitch", state.pitch); };
+    $("voice-select").onchange = (e) => { state.voiceName = e.target.value; store.set("voice2", state.voiceName); };
+    $("rate").oninput = (e) => { state.rate = +e.target.value; store.set("rate2", state.rate); };
+    $("pitch").oninput = (e) => { state.pitch = +e.target.value; store.set("pitch2", state.pitch); };
     $("wake-toggle").onchange = (e) => setWake(e.target.checked);
     $("sound-toggle").onchange = (e) => { state.soundEnabled = e.target.checked; store.set("sound", state.soundEnabled); };
     $("test-voice").onclick = () => speak(`Goedendag ${state.userName}. Dit is mijn stem. Alle systemen zijn operationeel.`);
@@ -1081,6 +1090,16 @@
   $("boot-btn").onclick = activate;
   $("logout-btn").onclick = logout;
   $("mic-btn").onclick = toggleMic;
+  // Toetsenbord-dicteren (iPhone): verstuur automatisch als er 2 s niets meer bij komt.
+  let typeTimer = null, lastKey = 0;
+  $("text-input").addEventListener("keydown", () => { lastKey = Date.now(); });
+  $("text-input").addEventListener("input", () => {
+    clearTimeout(typeTimer);
+    if (dict || rec) return;
+    if (Date.now() - lastKey < 1500) return; // gewoon typen: niet automatisch versturen
+    typeTimer = setTimeout(() => { if ($("text-input").value.trim()) $("text-form").requestSubmit(); }, 2000);
+  });
+
   $("text-form").onsubmit = (e) => {
     e.preventDefault();
     const v = $("text-input").value.trim();
