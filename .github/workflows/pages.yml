@@ -1,9 +1,9 @@
 # Zet Jarvis automatisch online op GitHub Pages bij elke wijziging.
 name: GitHub Pages
 
+# Alleen nodig als Pages op "GitHub Actions" staat; start dan handmatig via Actions → Run workflow.
+# (Op "Deploy from a branch" publiceert GitHub de site zelf; de root-index.html verwijst door naar public/.)
 on:
-  push:
-    branches: [main, master, claude/blissful-bell-8nqlx7]
   workflow_dispatch:
 
 permissions:
