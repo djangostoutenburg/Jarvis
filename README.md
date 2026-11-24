@@ -45,6 +45,19 @@ en kan met Claude als "brein" over van alles een gesprek voeren en actuele infor
 > Zonder API-sleutel start Jarvis in *basismodus*: de ingebouwde opdrachten werken dan wel,
 > vrije gesprekken niet.
 
+## Gratis met Claude: de claude.ai-versie (aanrader)
+
+Jarvis staat ook als privé Artifact op claude.ai: **https://claude.ai/artifact/5kkLQH8kfdauC9Vwt2gnEP**
+
+- Gebruikt Claude via je eigen claude.ai-account: geen API-sleutel en geen extra kosten
+  (wel binnen de gebruikslimieten van je Claude-abonnement).
+- Inloggen gaat via je claude.ai-account; alleen jij kunt de pagina openen.
+- Spraak: de spraakherkenning van Claude, in Chrome of Edge en in de Claude-desktopapp.
+  Op een iPhone, in Safari en in de mobiele Claude-apps kun je typen; Jarvis praat wel terug.
+- Kan niet op internet zoeken en toont geen weer.
+
+Bijwerken na een wijziging: `node scripts/build-artifact.mjs` en publiceer `dist/jarvis-artifact.html` opnieuw.
+
 ## Gratis of betaald brein
 
 Jarvis werkt met twee soorten sleutels. Hij herkent zelf welke je gebruikt:

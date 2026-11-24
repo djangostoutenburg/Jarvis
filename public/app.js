@@ -14,6 +14,10 @@
     set(k, v) { try { localStorage.setItem("jarvis." + k, JSON.stringify(v)); } catch { /* niets */ } },
   };
   const pad = (n) => String(n).padStart(2, "0");
+  // Draait Jarvis als Artifact op claude.ai? Dan gebruikt hij Claude via het account van de kijker.
+  const inArtifact = () => Boolean(window.claude && typeof window.claude.use === "function");
+  let sampleFn = null;   // claude.use("sample")
+  let dict = null;       // claude.use("dictation")
 
   const state = {
     mode: "idle",            // idle | listening | thinking | speaking
@@ -183,7 +187,48 @@
   let manualListen = false;
   let commandTimeout = null;
 
+  let dictBuf = "", dictTimer = null;
+  function initDictation() {
+    // Claude-spraakherkenning: luistert tot 60 minuten na één klik.
+    dict.onState(({ state: st, reason }) => {
+      recRunning = st !== "idle";
+      if (st === "listening" && state.mode === "idle") setMode("listening");
+      if (st === "idle") {
+        if (state.mode === "listening") setMode("idle");
+        if (reason === "not_granted" || reason === "unavailable") {
+          addLog("system", "Spraakherkenning is niet beschikbaar of niet toegestaan. Typ je opdrachten, of sta de microfoon toe via Machtigingen.");
+        } else if (reason === "hidden") {
+          transcriptEl.textContent = "Klik op de microfoon om weer te luisteren.";
+        }
+      }
+    });
+    const flush = () => {
+      const text = dictBuf.trim(); dictBuf = "";
+      if (text) handleHeard(text);
+    };
+    dict.onPartial(({ text }) => {
+      clearTimeout(dictTimer);
+      if (text && (state.awaitingCommand || manualListen || /jarvis|jervis/i.test(dictBuf + text))) {
+        transcriptEl.textContent = "“" + (dictBuf + " " + text).trim() + "”";
+      }
+      dictTimer = setTimeout(flush, 1300);
+    });
+    dict.onFinal(({ text }) => {
+      clearTimeout(dictTimer);
+      if (state.mode === "speaking" || state.mode === "thinking") { dictBuf = ""; return; } // eigen stem negeren
+      dictBuf += text;
+      dictTimer = setTimeout(flush, 1100);
+    });
+    startRecognition();
+  }
+
   function initRecognition() {
+    if (dict) { initDictation(); return; }
+    if (state.serverMode === "artifact") {
+      addLog("system", "Spraakherkenning werkt hier niet (gebruik Chrome of Edge op een computer). Typ je opdrachten hieronder.");
+      transcriptEl.textContent = "Typ een opdracht hieronder.";
+      return;
+    }
     if (!SR) {
       addLog("system", "Spraakherkenning wordt niet ondersteund in deze browser. Gebruik Chrome of Edge, of typ je opdrachten.");
       transcriptEl.textContent = "Typ een opdracht hieronder.";
@@ -269,10 +314,15 @@
   }
 
   function startRecognition() {
+    if (dict) {
+      if (!dict.active()) dict.start({ language: "nl" }).catch(() => {});
+      return;
+    }
     if (!rec || recRunning) return;
     try { rec.start(); } catch { /* al gestart */ }
   }
   function stopRecognition() {
+    if (dict) return; // blijft luisteren; eigen stem wordt genegeerd
     if (!rec || !recRunning) return;
     try { rec.abort(); } catch { /* niets */ }
   }
@@ -486,7 +536,9 @@
     const signal = currentRequest.signal;
 
     try {
-      if (state.serverMode) {
+      if (state.serverMode === "artifact") {
+        await askViaArtifact(signal, handleEvent);
+      } else if (state.serverMode) {
         const res = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -553,8 +605,45 @@
     }
   }
 
+  // Claude via claude.ai (Artifact): geen sleutel nodig, gebruikt het account van de kijker.
+  async function askViaArtifact(signal, handleEvent) {
+    const B = window.JarvisBrain;
+    const msgs = B.sanitizeHistory(state.history);
+    const instructions = B.systemPrompt(state.userName) + "\n\n" +
+      B.contextNote({ timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone, location: state.location?.name || null }) +
+      "\nJe kunt in deze versie niet op internet zoeken; zeg dat eerlijk als iemand om actueel nieuws of het weer vraagt." +
+      "\n\nHieronder volgt het gesprek. Antwoord alleen als Jarvis op het laatste bericht.\n\n";
+    msgs[0] = { role: "user", content: instructions + msgs[0].content };
+    try {
+      await sampleFn(msgs, {
+        signal,
+        cache: false,
+        onText: ({ delta }) => handleEvent({ type: "text", text: delta }),
+      });
+    } catch (err) {
+      if (err?.code === "cancelled" || signal.aborted) { const e = new Error("afgebroken"); e.name = "AbortError"; throw e; }
+      const msgs2 = {
+        not_granted: "Ik heb geen toestemming om Claude te gebruiken. Sta het toe via het menu Machtigingen van deze pagina.",
+        rate_limited: "Ik krijg even te veel verzoeken. Probeer het over een minuutje opnieuw.",
+        refused: "Mijn excuses, daar kan ik u helaas niet mee helpen.",
+        session_expired: "Uw claude.ai-sessie is verlopen. Herlaad de pagina en log opnieuw in.",
+        prompt_too_large: "Ons gesprek is te lang geworden. Wis mijn geheugen via de instellingen.",
+      };
+      handleEvent({ type: "error", text: msgs2[err?.code] || `Er ging iets mis met mijn verbinding, ${state.userName}.` });
+    }
+  }
+
   async function checkServer() {
-    if (state.serverMode === false) {
+    if (inArtifact() || state.serverMode === "artifact") {
+      state.serverMode = "artifact";
+      if (!sampleFn) {
+        [sampleFn, dict] = await Promise.all([
+          window.claude.use("sample").catch(() => null),
+          window.claude.use("dictation").catch(() => null),
+        ]);
+      }
+      state.aiAvailable = Boolean(sampleFn);
+    } else if (state.serverMode === false) {
       state.aiAvailable = Boolean(browserClient);
     } else {
       try {
@@ -604,6 +693,10 @@
   }
 
   async function updateWeather() {
+    if (inArtifact()) {
+      $("weather").closest(".panel").hidden = true;
+      return;
+    }
     try {
       if (!state.location) state.location = await locate();
       const { lat, lon } = state.location;
@@ -629,6 +722,7 @@
   }
 
   function speakWeather() {
+    if (!weather && state.serverMode === "artifact" && state.aiAvailable) { askAI("Wat is het weer?"); return; }
     if (!weather) { say("Ik heb op dit moment geen weergegevens beschikbaar."); return; }
     const place = state.location?.name ? ` in ${state.location.name}` : "";
     say(`Het is momenteel ${weather.temp} graden${place} en ${weather.desc}. Vandaag wordt het tussen de ${weather.min} en ${weather.max} graden, met ${weather.rain ?? 0} procent kans op neerslag.`);
