@@ -51,6 +51,16 @@
     <input id="key" type="password" placeholder="AIza... of sk-ant-..." required autocomplete="off">
     <div class="hint"><b>Gratis:</b> maak een Google Gemini-sleutel op <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (inloggen met je Google-account → <i>Create API key</i>). Die begint met <code>AIza</code>.<br>
     <b>Betaald (slimmer):</b> een Anthropic-sleutel van <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>, begint met <code>sk-ant-</code>.</div>
+    <label for="eleven">ElevenLabs API-sleutel (voor de Jarvis-stem, optioneel)</label>
+    <input id="eleven" type="password" placeholder="sk_..." autocomplete="off">
+    <div class="hint">Gratis account op <a href="https://elevenlabs.io/app/settings/api-keys" target="_blank" rel="noopener">elevenlabs.io</a> → <i>API Keys</i> → <i>Create API Key</i>. Geef de sleutel alleen toegang tot <b>Text to Speech</b>. Gratis: ongeveer 20 minuten spraak per maand. Leeg laten = de gewone stem van je apparaat.</div>
+    <label for="voice">Stem</label>
+    <select id="voice" style="width:100%;background:#02070d;color:#cdf7ff;border:1px solid rgba(62,233,255,.35);padding:10px 12px;font:inherit">
+      <option value="onwK4e9ZLuTAKqWW03F9">Daniel: Brits, diep en kalm (aanrader)</option>
+      <option value="JBFqnCBsd6RMkjVDRZzb">George: Brits, warm</option>
+      <option value="custom">Eigen stem-ID uit ElevenLabs…</option>
+    </select>
+    <input id="voice-custom" placeholder="Voice ID, bijv. uit je ElevenLabs Voice Library" hidden style="margin-top:8px">
     <label for="pw">Kies een wachtwoord om in te loggen</label>
     <input id="pw" type="password" minlength="12" required autocomplete="new-password">
     <div class="hint">Minstens 12 tekens. Hoe langer, hoe veiliger, want de versleutelde sleutel staat openbaar online. Bijvoorbeeld vier losse woorden: <i>paars-fiets-wolk-tijger</i>.</div>
@@ -85,6 +95,8 @@
     ? `https://github.com/${host[1]}/${repo}/blob/HEAD/public/config.js`
     : "https://github.com";
 
+  $("voice").onchange = () => { $("voice-custom").hidden = $("voice").value !== "custom"; };
+
   $("form").onsubmit = async (e) => {
     e.preventDefault();
     const msg = $("msg");
@@ -94,9 +106,14 @@
     if (pw.length < 12) { msg.className = "err"; msg.textContent = "Kies een wachtwoord van minstens 12 tekens."; return; }
     if (!/^(sk-ant-|AIza)/.test(key)) { msg.className = "err"; msg.textContent = "Dit lijkt geen geldige sleutel (een Gemini-sleutel begint met AIza, een Anthropic-sleutel met sk-ant-)."; return; }
 
+    const elevenKey = $("eleven").value.trim();
+    const voice = $("voice").value === "custom" ? $("voice-custom").value.trim() : $("voice").value;
+    if (elevenKey && !voice) { msg.className = "err"; msg.textContent = "Vul een stem-ID in, of kies Daniel of George."; return; }
+    const secret = JSON.stringify(elevenKey ? { ai: key, eleven: elevenKey, voice } : { ai: key });
+
     msg.textContent = "Bezig met versleutelen…";
-    const vault = await encryptSecret(key, pw);
-    if ((await decryptSecret(vault, pw)) !== key) { msg.className = "err"; msg.textContent = "Controle mislukt, probeer opnieuw."; return; }
+    const vault = await encryptSecret(secret, pw);
+    if ((await decryptSecret(vault, pw)) !== secret) { msg.className = "err"; msg.textContent = "Controle mislukt, probeer opnieuw."; return; }
 
     const text =
 `// Instellingen voor de GitHub Pages-versie (gemaakt met setup.html).
@@ -106,7 +123,7 @@ window.JARVIS_CONFIG = ${JSON.stringify({ userName: name, vault }, null, 2)};
     $("out").value = text;
     $("download").href = URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
     $("result").hidden = false;
-    $("key").value = ""; $("pw").value = ""; $("pw2").value = "";
+    $("key").value = ""; $("eleven").value = ""; $("pw").value = ""; $("pw2").value = "";
     msg.className = "ok"; msg.textContent = "Klaar! Ga verder met stap 2.";
     $("result").scrollIntoView({ behavior: "smooth" });
   };

@@ -58,6 +58,24 @@ Jarvis staat ook als privé Artifact op claude.ai: **https://claude.ai/artifact/
 
 Bijwerken na een wijziging: `node scripts/build-artifact.mjs` en publiceer `dist/jarvis-artifact.html` opnieuw.
 
+## De Jarvis-stem (ElevenLabs)
+
+Op de eigen site (GitHub Pages) kan Jarvis spreken met een stem van ElevenLabs: standaard **Daniel**,
+een diepe, kalme Britse mannenstem die Nederlands spreekt met een licht Engels accent.
+
+1. Maak een gratis account op <https://elevenlabs.io>.
+2. Ga naar **API Keys** → **Create API Key** en geef alleen toegang tot *Text to Speech*.
+3. Vul de sleutel in op `setup.html` en kies een stem (Daniel, George of een eigen stem-ID).
+
+Gratis is ongeveer 20 minuten spraak per maand. Is dat op, dan valt Jarvis vanzelf terug op de stem van je apparaat.
+
+## Altijd luisteren
+
+- Zolang de Jarvis-pagina openstaat, luistert hij naar "Jarvis …" en houdt hij het scherm aan.
+- **iPhone:** gebruik Safari. Maak een Siri-opdracht zodat **"Hé Siri, Jarvis"** de pagina opent:
+  app **Opdrachten** → **+** → **Open URL** → `https://djangostoutenburg.github.io/Jarvis/` → noem de opdracht *Jarvis*.
+- Een iPhone stopt met luisteren als het scherm uitgaat of je een andere app opent; dat kan geen website omzeilen.
+
 ## Gratis of betaald brein
 
 Jarvis werkt met twee soorten sleutels. Hij herkent zelf welke je gebruikt:

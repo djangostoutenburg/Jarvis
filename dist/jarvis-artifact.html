@@ -507,6 +507,14 @@ return { systemPrompt, sanitizeHistory, contextNote };
   const inArtifact = () => Boolean(window.claude && typeof window.claude.use === "function");
   let sampleFn = null;   // claude.use("sample")
   let dict = null;       // claude.use("dictation")
+  // ElevenLabs-stemmen (alleen op de eigen site)
+  const EL_VOICES = {
+    onwK4e9ZLuTAKqWW03F9: "Daniel (Brits, diep en kalm)",
+    JBFqnCBsd6RMkjVDRZzb: "George (Brits, warm)",
+  };
+  const EL_DEFAULT_VOICE = "onwK4e9ZLuTAKqWW03F9";
+  let eleven = null;            // { key, voiceId } na ontgrendelen
+
 
   const state = {
     mode: "idle",            // idle | listening | thinking | speaking
@@ -602,11 +610,28 @@ return { systemPrompt, sanitizeHistory, contextNote };
     const nl = voices.filter((v) => /^nl/i.test(v.lang));
     const sel = $("voice-select");
     sel.innerHTML = "";
+    if (eleven) {
+      const ids = { ...EL_VOICES };
+      if (!ids[eleven.voiceId]) ids[eleven.voiceId] = "Eigen stem";
+      for (const [id, label] of Object.entries(ids)) {
+        const o = document.createElement("option");
+        o.value = "el:" + id; o.textContent = "ElevenLabs: " + label;
+        sel.appendChild(o);
+      }
+    }
     (nl.length ? nl : voices).forEach((v) => {
       const o = document.createElement("option");
       o.value = v.name; o.textContent = `${v.name} (${v.lang})`;
       sel.appendChild(o);
     });
+    if (eleven) {
+      if (!state.voiceName || !state.voiceName.startsWith("el:") || ![...sel.options].some((o) => o.value === state.voiceName)) {
+        state.voiceName = "el:" + eleven.voiceId;
+      }
+      sel.value = state.voiceName;
+      return;
+    }
+    if (state.voiceName && state.voiceName.startsWith("el:")) state.voiceName = null;
     if (state.voiceName && voices.some((v) => v.name === state.voiceName)) {
       sel.value = state.voiceName;
       return;
@@ -622,6 +647,12 @@ return { systemPrompt, sanitizeHistory, contextNote };
     const v = nl.find((x) => /nl-NL/i.test(x.lang) && !female.test(x.name)) || nl.find((x) => !female.test(x.name)) || nl[0];
     if (v) { sel.value = v.name; state.voiceName = v.name; }
   }
+  function bestBrowserVoice() {
+    const nl = voices.filter((v) => /^nl/i.test(v.lang));
+    const male = [/xander.*(premium|enhanced|verbeterd)/i, /maarten.*natural/i, /xander/i, /maarten/i, /arnaud/i, /frank/i, /google.*nederlands/i];
+    for (const p of male) { const v = nl.find((x) => p.test(x.name)); if (v) return v.name; }
+    return nl[0]?.name;
+  }
   if (synth) {
     pickVoice();
     synth.onvoiceschanged = pickVoice;
@@ -635,22 +666,106 @@ return { systemPrompt, sanitizeHistory, contextNote };
       .trim();
   }
 
-  function speak(text) {
-    const t = cleanForSpeech(text);
-    if (!t || !synth) return;
+  // ---------------------------------------------------------------------------
+  // ElevenLabs-stem (eigen site): een diepe Britse butlerstem die Nederlands spreekt
+  // ---------------------------------------------------------------------------
+  let elChain = Promise.resolve();
+  let elGen = 0;                // verhoogd bij onderbreken
+  const audioEl = new Audio();
+  audioEl.preload = "auto";
+
+  function silentWavUrl() {
+    const n = 800, buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    const w = (o, str) => [...str].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); w(8, "WAVE"); w(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 16000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+    w(36, "data"); v.setUint32(40, n * 2, true);
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+  // iPhone staat geluid pas toe na een tik: bij de eerste klik even stil afspelen.
+  function unlockAudio() {
+    try { audioEl.src = silentWavUrl(); audioEl.play().catch(() => {}); } catch { /* niets */ }
+  }
+
+  function useEleven() {
+    return Boolean(eleven) && (!state.voiceName || state.voiceName.startsWith("el:"));
+  }
+
+  function elevenSpeak(t, finish) {
+    const gen = elGen;
+    const voiceId = state.voiceName && state.voiceName.startsWith("el:") ? state.voiceName.slice(3) : eleven.voiceId;
+    const audioP = fetch(`https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`, {
+      method: "POST",
+      headers: { "xi-api-key": eleven.key, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text: t,
+        model_id: "eleven_flash_v2_5",
+        language_code: "nl",
+        voice_settings: { stability: 0.55, similarity_boost: 0.8, style: 0.15, speed: Math.min(1.2, Math.max(0.7, state.rate)) },
+      }),
+    }).then(async (r) => {
+      if (!r.ok) throw Object.assign(new Error("ElevenLabs " + r.status + " " + (await r.text().catch(() => ""))), { status: r.status });
+      return r.blob();
+    });
+    audioP.catch(() => {}); // fout wordt hieronder afgehandeld
+    elChain = elChain.then(async () => {
+      if (gen !== elGen) return finish();
+      let blob;
+      try { blob = await audioP; } catch (err) { elevenFailed(err); return browserSpeak(t, finish); }
+      if (gen !== elGen) return finish();
+      await new Promise((resolve) => {
+        const url = URL.createObjectURL(blob);
+        const end = () => { URL.revokeObjectURL(url); resolve(); };
+        audioEl.onended = end; audioEl.onerror = end;
+        audioEl.src = url;
+        audioEl.play().catch(end);
+      });
+      finish();
+    });
+  }
+
+  function elevenFailed(err) {
+    console.warn(err);
+    if (!eleven) return;
+    const s = err?.status;
+    if (s === 401 || s === 402 || s === 403 || s === 429) {
+      const quota = /quota|credits/i.test(err.message);
+      addLog("system", quota
+        ? "Het gratis ElevenLabs-tegoed van deze maand is op. Ik gebruik voorlopig de standaardstem."
+        : "De ElevenLabs-stem werkt niet (sleutel ongeldig of geblokkeerd). Ik gebruik voorlopig de standaardstem.");
+      eleven = null;
+      pickVoice();
+    }
+  }
+
+  function browserSpeak(t, finish) {
+    if (!synth) return finish();
     const u = new SpeechSynthesisUtterance(t);
     u.lang = "nl-NL";
-    const v = voices.find((x) => x.name === state.voiceName);
+    const v = voices.find((x) => x.name === state.voiceName) || voices.find((x) => x.name === bestBrowserVoice());
     if (v) { try { u.voice = v; u.lang = v.lang; } catch { /* stem niet bruikbaar */ } }
     u.rate = state.rate; u.pitch = state.pitch;
+    u.onboundary = () => { state.level = 1; };
+    let ended = false;
+    const end = () => { if (ended) return; ended = true; clearTimeout(watchdog); finish(); };
+    u.onend = end;
+    u.onerror = end;
+    // Sommige browsers (o.a. in claude.ai) melden het einde nooit: na de geschatte duur toch afsluiten.
+    const watchdog = setTimeout(end, 2500 + t.length * 90 / (state.rate || 1));
+    synth.speak(u);
+  }
+
+  function speak(text) {
+    const t = cleanForSpeech(text);
+    if (!t) return;
+    if (!useEleven() && !synth) return;
     speakQueue++;
     stopRecognition();
     setMode("speaking");
-    u.onboundary = () => { state.level = 1; };
     let done = false;
     const finish = () => {
       if (done) return; done = true;
-      clearTimeout(watchdog);
       speakQueue = Math.max(0, speakQueue - 1);
       if (speakQueue === 0 && !streaming) {
         setMode("idle");
@@ -659,15 +774,15 @@ return { systemPrompt, sanitizeHistory, contextNote };
         resumeListening();
       }
     };
-    u.onend = finish;
-    u.onerror = finish;
-    // Sommige browsers (o.a. in claude.ai) melden het einde nooit: na de geschatte duur toch afsluiten.
-    const watchdog = setTimeout(finish, 2500 + t.length * 90 / (state.rate || 1));
-    synth.speak(u);
+    if (useEleven()) elevenSpeak(t, finish);
+    else browserSpeak(t, finish);
   }
 
   function stopSpeaking() {
     if (synth) synth.cancel();
+    elGen++;
+    try { audioEl.pause(); } catch { /* niets */ }
+    elChain = Promise.resolve();
     speakQueue = 0;
     if (currentRequest) currentRequest.abort();
   }
@@ -1278,7 +1393,9 @@ return { systemPrompt, sanitizeHistory, contextNote };
   // Microfoonniveau voor de visualisatie (optioneel)
   // ---------------------------------------------------------------------------
   let analyser = null, analyserData = null;
+  const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
   async function initMicLevel() {
+    if (isIOS) return; // iOS staat maar één microfoongebruiker toe: laat hem aan de spraakherkenning
     try {
       ensureAudio();
       if (!audioCtx || !navigator.mediaDevices) return;
@@ -1507,6 +1624,7 @@ return { systemPrompt, sanitizeHistory, contextNote };
           const { decryptSecret } = await import("./vault.mjs");
           const apiKey = await decryptSecret(CONFIG.vault, $("gate-pw").value);
           if ($("gate-remember").checked) store.set(UNLOCK_KEY, { apiKey, exp: Date.now() + 30 * 86400000 });
+          unlockAudio();
           gate.hidden = true;
           sfx.activate();
           resolve(apiKey);
@@ -1527,8 +1645,15 @@ return { systemPrompt, sanitizeHistory, contextNote };
     if (state.serverMode || !CONFIG?.vault) return;
     if (CONFIG.userName) state.userName = CONFIG.userName;
     const saved = store.get(UNLOCK_KEY, null);
-    const apiKey = saved && saved.exp > Date.now() ? saved.apiKey : await askPassword();
-    await makeBrowserClient(apiKey);
+    const secret = saved && saved.exp > Date.now() ? saved.apiKey : await askPassword();
+    // Nieuwe config: JSON met { ai, eleven, voice }; oude config: alleen de AI-sleutel.
+    let secrets = { ai: secret };
+    try { if (secret.trim().startsWith("{")) secrets = JSON.parse(secret); } catch { /* oude vorm */ }
+    if (secrets.eleven) {
+      eleven = { key: secrets.eleven, voiceId: secrets.voice || EL_DEFAULT_VOICE };
+      pickVoice();
+    }
+    await makeBrowserClient(secrets.ai);
     await checkServer();
   }
 
@@ -1553,8 +1678,26 @@ return { systemPrompt, sanitizeHistory, contextNote };
     $("boot-btn").focus();
   }
 
+  // Scherm aan houden zolang Jarvis openstaat, zodat hij blijft luisteren.
+  let wakeLock = null;
+  async function keepScreenOn() {
+    try {
+      if (!navigator.wakeLock || wakeLock) return;
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    } catch { /* niet ondersteund of geweigerd */ }
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && $("boot")?.classList.contains("hide") !== false) {
+      keepScreenOn();
+      resumeListening();
+    }
+  });
+
   async function activate() {
     ensureAudio();
+    unlockAudio();
+    keepScreenOn();
     sfx.boot();
     $("boot").classList.add("hide");
     setTimeout(() => $("boot").remove(), 900);
