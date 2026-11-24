@@ -8,8 +8,10 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
+      - key: GEMINI_API_KEY
+        sync: false   # gratis sleutel van aistudio.google.com (of laat leeg en vul ANTHROPIC_API_KEY)
       - key: ANTHROPIC_API_KEY
-        sync: false   # wordt bij het aanmaken gevraagd
+        sync: false   # optioneel, betaald
       - key: JARVIS_PASSWORD
         sync: false   # kies hier je inlogwachtwoord
       - key: JARVIS_USER_NAME

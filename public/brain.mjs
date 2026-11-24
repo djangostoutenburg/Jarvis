@@ -97,8 +97,74 @@ export async function streamReply(client, { history, userName, timeZone, locatio
 export function errorMessage(err, userName) {
   const s = err?.status;
   if (s === 401 || s === 403) return "Mijn API-sleutel lijkt ongeldig te zijn.";
-  if (s === 429) return "Ik krijg even te veel verzoeken. Probeer het zo nog eens.";
+  if (s === 429) return "Het gratis tegoed voor nu is even op. Probeer het over een minuutje opnieuw.";
   if (s === 529 || (s >= 500 && s < 600)) return "De AI-servers zijn even overbelast. Probeer het zo nog eens.";
   if (!s) return "Ik kan de servers niet bereiken. Controleer de internetverbinding.";
   return `Er ging iets mis met mijn verbinding, ${userName}.`;
+}
+
+// ---------------------------------------------------------------------------
+// Google Gemini (gratis sleutel via aistudio.google.com)
+// ---------------------------------------------------------------------------
+export const GEMINI_MODEL = "gemini-flash-latest";
+
+/**
+ * Streamt een antwoord van Gemini via de REST-API (werkt in browser en Node).
+ * Zelfde callbacks als streamReply. Gooit een fout met .status bij HTTP-fouten.
+ */
+export async function streamReplyGemini(apiKey, { history, userName, timeZone, location, signal, onText, onStatus }) {
+  const base = sanitizeHistory(history);
+  if (!base.length || base[base.length - 1].role !== "user") throw new Error("Lege vraag");
+
+  const body = (withSearch) => JSON.stringify({
+    system_instruction: { parts: [{ text: systemPrompt(userName) + "\n\n" + contextNote({ timeZone, location }) }] },
+    contents: base.map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+    ...(withSearch ? { tools: [{ google_search: {} }] } : {}),
+    generationConfig: { maxOutputTokens: 1500, temperature: 0.7 },
+  });
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:streamGenerateContent?alt=sse`;
+  const call = (withSearch) => fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+    body: body(withSearch),
+    signal,
+  });
+
+  let res = await call(true);
+  // Lukt het niet mét Google Zoeken (bijv. quotum op), dan zonder proberen.
+  if (!res.ok && res.status !== 401 && res.status !== 403) res = await call(false);
+  if (!res.ok) {
+    const err = new Error(`Gemini HTTP ${res.status}: ${await res.text().catch(() => "")}`);
+    err.status = res.status === 400 && /API key/i.test(err.message) ? 401 : res.status;
+    throw err;
+  }
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "", searched = false, gotText = false, blocked = false;
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      let chunk;
+      try { chunk = JSON.parse(line.slice(5)); } catch { continue; }
+      if (chunk.promptFeedback?.blockReason) blocked = true;
+      const cand = chunk.candidates?.[0];
+      if (cand?.groundingMetadata && !searched && !gotText) { searched = true; onStatus?.("Ik zoek het even op…"); }
+      for (const part of cand?.content?.parts || []) {
+        if (part.text && !part.thought) { gotText = true; onText?.(part.text); }
+      }
+      if (cand?.finishReason === "SAFETY") blocked = true;
+    }
+  }
+  if (blocked && !gotText) {
+    onText?.("Mijn excuses, daar kan ik u helaas niet mee helpen.");
+    return { refused: true };
+  }
+  return { refused: false };
 }

@@ -516,7 +516,7 @@
         // GitHub Pages-modus: rechtstreeks vanuit de browser met de ontgrendelde sleutel.
         const brain = await import("./brain.mjs");
         try {
-          await brain.streamReply(browserClient, {
+          const opts = {
             history: state.history,
             userName: state.userName,
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -524,7 +524,9 @@
             signal,
             onText: (text) => handleEvent({ type: "text", text }),
             onStatus: (text) => handleEvent({ type: "status", text }),
-          });
+          };
+          if (browserClient.provider === "gemini") await brain.streamReplyGemini(browserClient.apiKey, opts);
+          else await brain.streamReply(browserClient.client, opts);
         } catch (err) {
           if (signal.aborted) { const e = new Error("afgebroken"); e.name = "AbortError"; throw e; }
           console.error(err);
@@ -887,8 +889,12 @@
   const UNLOCK_KEY = "unlocked";
 
   async function makeBrowserClient(apiKey) {
-    const { default: Anthropic } = await import("./vendor/anthropic.mjs");
-    browserClient = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+    if (/^sk-ant-/.test(apiKey)) {
+      const { default: Anthropic } = await import("./vendor/anthropic.mjs");
+      browserClient = { provider: "claude", client: new Anthropic({ apiKey, dangerouslyAllowBrowser: true }) };
+    } else {
+      browserClient = { provider: "gemini", apiKey }; // gratis Google Gemini-sleutel
+    }
   }
 
   function askPassword() {

@@ -47,9 +47,10 @@
     <p class="hint" style="opacity:.8">Alles op deze pagina gebeurt in je eigen browser. Je sleutel en wachtwoord worden nergens naartoe gestuurd.</p>
     <label for="name">Hoe moet Jarvis je noemen?</label>
     <input id="name" value="meneer" required>
-    <label for="key">Anthropic API-sleutel</label>
-    <input id="key" type="password" placeholder="sk-ant-..." required autocomplete="off">
-    <div class="hint">Maak er een op <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Tip: stel daar ook een maandelijkse uitgavelimiet in.</div>
+    <label for="key">API-sleutel</label>
+    <input id="key" type="password" placeholder="AIza... of sk-ant-..." required autocomplete="off">
+    <div class="hint"><b>Gratis:</b> maak een Google Gemini-sleutel op <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com/apikey</a> (inloggen met je Google-account → <i>Create API key</i>). Die begint met <code>AIza</code>.<br>
+    <b>Betaald (slimmer):</b> een Anthropic-sleutel van <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>, begint met <code>sk-ant-</code>.</div>
     <label for="pw">Kies een wachtwoord om in te loggen</label>
     <input id="pw" type="password" minlength="12" required autocomplete="new-password">
     <div class="hint">Minstens 12 tekens. Hoe langer, hoe veiliger, want de versleutelde sleutel staat openbaar online. Bijvoorbeeld vier losse woorden: <i>paars-fiets-wolk-tijger</i>.</div>
@@ -91,7 +92,7 @@
     const key = $("key").value.trim(), pw = $("pw").value, name = $("name").value.trim() || "meneer";
     if (pw !== $("pw2").value) { msg.className = "err"; msg.textContent = "De wachtwoorden komen niet overeen."; return; }
     if (pw.length < 12) { msg.className = "err"; msg.textContent = "Kies een wachtwoord van minstens 12 tekens."; return; }
-    if (!/^sk-ant-/.test(key)) { msg.className = "err"; msg.textContent = "Dit lijkt geen Anthropic API-sleutel (die begint met sk-ant-)."; return; }
+    if (!/^(sk-ant-|AIza)/.test(key)) { msg.className = "err"; msg.textContent = "Dit lijkt geen geldige sleutel (een Gemini-sleutel begint met AIza, een Anthropic-sleutel met sk-ant-)."; return; }
 
     msg.textContent = "Bezig met versleutelen…";
     const vault = await encryptSecret(key, pw);

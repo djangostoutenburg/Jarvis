@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
-import { MODEL, streamReply, errorMessage } from "./public/brain.mjs";
+import { MODEL, GEMINI_MODEL, streamReply, streamReplyGemini, errorMessage } from "./public/brain.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -18,7 +18,10 @@ if (fs.existsSync(path.join(__dirname, ".env"))) {
 const PORT = Number(process.env.PORT) || 3000;
 const USER_NAME = process.env.JARVIS_USER_NAME || "meneer";
 const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
-const client = hasKey ? new Anthropic() : null;
+const anthropic = hasKey ? new Anthropic() : null;
+const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+// Voorkeur: Claude als die sleutel er is, anders de gratis Gemini-sleutel.
+const client = anthropic || (GEMINI_KEY ? "gemini" : null);
 
 // ---------------------------------------------------------------------------
 // Inloggen met wachtwoord (actief zodra JARVIS_PASSWORD is ingesteld)
@@ -158,7 +161,8 @@ async function handleChat(req, res) {
   res.on("close", () => controller.abort());
 
   try {
-    await streamReply(client, {
+    const run = anthropic ? (o) => streamReply(anthropic, o) : (o) => streamReplyGemini(GEMINI_KEY, o);
+    await run({
       history: body.history,
       userName: USER_NAME,
       timeZone: body.timeZone,
@@ -194,7 +198,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "GET" && req.url === "/api/status") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ ai: Boolean(client), userName: USER_NAME, model: MODEL }));
+    res.end(JSON.stringify({ ai: Boolean(client), userName: USER_NAME, model: anthropic ? MODEL : GEMINI_MODEL }));
     return;
   }
   if (req.method === "POST" && req.url === "/api/chat") return handleChat(req, res);
@@ -204,9 +208,9 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`\n  J.A.R.V.I.S. is online → http://localhost:${PORT}`);
-  console.log(hasKey
-    ? "  AI-brein: actief"
-    : "  AI-brein: UIT (zet ANTHROPIC_API_KEY in .env voor vrije gesprekken)");
+  console.log(anthropic ? "  AI-brein: Claude"
+    : GEMINI_KEY ? "  AI-brein: Google Gemini (gratis)"
+    : "  AI-brein: UIT (zet GEMINI_API_KEY of ANTHROPIC_API_KEY in .env)");
   console.log(PASSWORD
     ? "  Inloggen: wachtwoord vereist"
     : "  Inloggen: UIT (zet JARVIS_PASSWORD om met wachtwoord te beveiligen)");

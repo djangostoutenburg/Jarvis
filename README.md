@@ -45,6 +45,22 @@ en kan met Claude als "brein" over van alles een gesprek voeren en actuele infor
 > Zonder API-sleutel start Jarvis in *basismodus*: de ingebouwde opdrachten werken dan wel,
 > vrije gesprekken niet.
 
+## Gratis of betaald brein
+
+Jarvis werkt met twee soorten sleutels. Hij herkent zelf welke je gebruikt:
+
+| | Google Gemini | Anthropic Claude |
+|---|---|---|
+| Kosten | **Gratis** (met een daglimiet) | Betalen per gebruik |
+| Sleutel maken | <https://aistudio.google.com/apikey> | <https://console.anthropic.com> |
+| Begint met | `AIza` | `sk-ant-` |
+| Actuele info | Via Google Zoeken | Via webzoeken |
+
+Een Gemini-sleutel maken: log in met je Google-account, klik op **Create API key** en kopieer hem.
+Het gratis tegoed is ruim genoeg voor persoonlijk gebruik. Is het op, dan zegt Jarvis dat en kun je
+het even later opnieuw proberen. Let op: Google mag gesprekken uit de gratis versie gebruiken om zijn
+modellen te verbeteren. Deel er dus geen gevoelige informatie mee.
+
 ## Online zetten via GitHub Pages (gratis, aanrader)
 
 Je krijgt dan het adres **https://djangostoutenburg.github.io/Jarvis/**, beveiligd met een wachtwoord.
@@ -56,7 +72,7 @@ Je krijgt dan het adres **https://djangostoutenburg.github.io/Jarvis/**, beveili
 2. Ga naar het tabblad **Actions**, klik links op **GitHub Pages** en dan op **Run workflow**.
    Na 1 à 2 minuten staat de site online.
 3. Open **https://djangostoutenburg.github.io/Jarvis/setup.html** en vul in:
-   je naam, je API-sleutel en een wachtwoord (minstens 12 tekens).
+   je naam, je API-sleutel (gratis Gemini of Anthropic) en een wachtwoord (minstens 12 tekens).
    Dit gebeurt alleen in je eigen browser; er wordt niets verstuurd.
 4. Volg stap 2 op die pagina: kopieer de tekst en plak die in `public/config.js` op GitHub
    (potloodje ✎ → plakken → **Commit changes**).
