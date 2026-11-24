@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>J.A.R.V.I.S.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Opstartscherm -->
+  <div id="boot">
+    <div class="boot-inner">
+      <div class="boot-logo">J.A.R.V.I.S.</div>
+      <div class="boot-sub">Just A Rather Very Intelligent System</div>
+      <pre id="boot-log"></pre>
+      <button id="boot-btn" class="hud-btn" hidden>SYSTEEM ACTIVEREN</button>
+      <div class="boot-hint">Gebruik Google Chrome of Microsoft Edge voor spraakherkenning</div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div class="scanlines"></div>
+    <div class="grid-bg"></div>
+
+    <header class="top">
+      <div class="brand">J.A.R.V.I.S.<span>MARK&nbsp;NL</span></div>
+      <div id="status-pill" class="pill">STAND-BY</div>
+      <div class="top-right">
+        <span id="ai-indicator" class="dot"></span><span id="ai-label">AI-KERN</span>
+        <button id="settings-btn" class="icon-btn" title="Instellingen">⚙</button>
+      </div>
+    </header>
+
+    <aside class="left">
+      <section class="panel">
+        <h3>TIJD</h3>
+        <div id="clock" class="big">--:--</div>
+        <div id="seconds" class="sec">--</div>
+        <div id="date" class="small">—</div>
+      </section>
+
+      <section class="panel">
+        <h3>WEER</h3>
+        <div id="weather" class="small">Locatie wordt bepaald…</div>
+      </section>
+
+      <section class="panel">
+        <h3>SYSTEEM</h3>
+        <div class="stat"><span>PROCESSOR</span><span id="sys-cpu">—</span></div>
+        <div class="bar"><i id="bar-cpu"></i></div>
+        <div class="stat"><span>GEHEUGEN</span><span id="sys-mem">—</span></div>
+        <div class="bar"><i id="bar-mem"></i></div>
+        <div class="stat"><span>ENERGIE</span><span id="sys-bat">—</span></div>
+        <div class="bar"><i id="bar-bat"></i></div>
+        <div class="stat"><span>NETWERK</span><span id="sys-net">—</span></div>
+        <div class="stat"><span>UPTIME</span><span id="sys-up">00:00:00</span></div>
+      </section>
+    </aside>
+
+    <main class="center">
+      <canvas id="reactor"></canvas>
+      <div id="caption" class="caption"></div>
+    </main>
+
+    <aside class="right">
+      <section class="panel log-panel">
+        <h3>DIALOOG</h3>
+        <div id="log"></div>
+      </section>
+    </aside>
+
+    <footer class="bottom">
+      <div id="transcript" class="transcript">Zeg <b>"Jarvis"</b> of klik op de microfoon.</div>
+      <form id="text-form" class="input-row" autocomplete="off">
+        <button type="button" id="mic-btn" class="mic" title="Spreek (spatiebalk)">
+          <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        </button>
+        <input id="text-input" type="text" placeholder="Of typ een opdracht…">
+        <button type="submit" class="hud-btn small-btn">VERSTUUR</button>
+      </form>
+    </footer>
+  </div>
+
+  <!-- Instellingen -->
+  <dialog id="settings">
+    <form method="dialog" class="settings-inner">
+      <h2>INSTELLINGEN</h2>
+      <label>Stem
+        <select id="voice-select"></select>
+      </label>
+      <label>Spreeksnelheid <input id="rate" type="range" min="0.7" max="1.4" step="0.05" value="1"></label>
+      <label>Toonhoogte <input id="pitch" type="range" min="0.5" max="1.5" step="0.05" value="0.9"></label>
+      <label class="check"><input id="wake-toggle" type="checkbox" checked> Altijd luisteren naar "Jarvis"</label>
+      <label class="check"><input id="sound-toggle" type="checkbox" checked> Interface-geluiden</label>
+      <div class="settings-actions">
+        <button type="button" id="test-voice" class="hud-btn small-btn">TEST STEM</button>
+        <button type="button" id="clear-memory" class="hud-btn small-btn">WIS GESPREK</button>
+        <button class="hud-btn small-btn">SLUITEN</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

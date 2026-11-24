@@ -1,0 +1,14 @@
+{
+  "name": "jarvis-nl",
+  "version": "1.0.0",
+  "description": "Een Nederlandstalige, pratende AI-assistent met een HUD-interface",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.13.0"
+  }
+}
