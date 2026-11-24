@@ -14,6 +14,13 @@
     <div class="boot-inner">
       <div class="boot-logo">J.A.R.V.I.S.</div>
       <div class="boot-sub">Just A Rather Very Intelligent System</div>
+      <form id="gate" hidden autocomplete="on">
+        <label for="gate-pw">WACHTWOORD</label>
+        <input id="gate-pw" type="password" autocomplete="current-password" required>
+        <label class="gate-check"><input id="gate-remember" type="checkbox" checked> Onthoud mij op dit apparaat (30 dagen)</label>
+        <button class="hud-btn" type="submit">TOEGANG AANVRAGEN</button>
+        <p id="gate-err"></p>
+      </form>
       <pre id="boot-log"></pre>
       <button id="boot-btn" class="hud-btn" hidden>SYSTEEM ACTIVEREN</button>
       <div class="boot-hint">Gebruik Google Chrome of Microsoft Edge voor spraakherkenning</div>
@@ -30,7 +37,7 @@
       <div class="top-right">
         <span id="ai-indicator" class="dot"></span><span id="ai-label">AI-KERN</span>
         <button id="settings-btn" class="icon-btn" title="Instellingen">⚙</button>
-        <a href="/logout" class="icon-btn" id="logout-btn" title="Uitloggen" style="text-decoration:none">⏻</a>
+        <button id="logout-btn" class="icon-btn" title="Uitloggen">⏻</button>
       </div>
     </header>
 
@@ -103,6 +110,7 @@
     </form>
   </dialog>
 
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

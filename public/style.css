@@ -39,6 +39,16 @@ body {
   text-align: left; font-family: ui-monospace, monospace; font-size: 13px;
   color: var(--cyan); opacity: .85; min-height: 170px; white-space: pre-wrap;
 }
+#gate { text-align: left; margin: 0 auto 10px; width: min(380px, 100%); }
+#gate label { display: block; font-family: "Orbitron", sans-serif; font-size: 11px; letter-spacing: .3em; color: var(--gold); margin-bottom: 8px; }
+#gate input[type=password] {
+  width: 100%; background: rgba(4,22,34,.75); border: 1px solid var(--cyan-dim); color: var(--text);
+  font: inherit; font-size: 18px; padding: 12px 14px; outline: none; letter-spacing: .15em;
+}
+#gate input[type=password]:focus { border-color: var(--cyan); box-shadow: 0 0 14px var(--cyan-dim); }
+#gate .gate-check { display: flex; gap: 8px; align-items: center; font-family: inherit; font-size: 14px; letter-spacing: 0; color: var(--text); opacity: .8; margin: 12px 0 0; }
+#gate .hud-btn { width: 100%; margin-top: 16px; }
+#gate-err { color: var(--red); margin-top: 12px; min-height: 1.2em; text-align: center; }
 .boot-hint { margin-top: 18px; font-size: 12px; opacity: .45; }
 
 @keyframes flicker {

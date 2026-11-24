@@ -45,7 +45,33 @@ en kan met Claude als "brein" over van alles een gesprek voeren en actuele infor
 > Zonder API-sleutel start Jarvis in *basismodus*: de ingebouwde opdrachten werken dan wel,
 > vrije gesprekken niet.
 
-## Online zetten met eigen URL en wachtwoord
+## Online zetten via GitHub Pages (gratis, aanrader)
+
+Je krijgt dan het adres **https://djangostoutenburg.github.io/Jarvis/**, beveiligd met een wachtwoord.
+
+**Eenmalig instellen:**
+
+1. Ga op GitHub naar je repository → **Settings** → **Pages**.
+   Kies bij **Source** voor **GitHub Actions**.
+2. Ga naar het tabblad **Actions**, klik links op **GitHub Pages** en dan op **Run workflow**.
+   Na 1 à 2 minuten staat de site online.
+3. Open **https://djangostoutenburg.github.io/Jarvis/setup.html** en vul in:
+   je naam, je API-sleutel en een wachtwoord (minstens 12 tekens).
+   Dit gebeurt alleen in je eigen browser; er wordt niets verstuurd.
+4. Volg stap 2 op die pagina: kopieer de tekst en plak die in `public/config.js` op GitHub
+   (potloodje ✎ → plakken → **Commit changes**).
+5. Wacht 1 à 2 minuten en open **https://djangostoutenburg.github.io/Jarvis/**.
+   Log in met je wachtwoord. Klaar!
+
+**Hoe veilig is dit?**
+- Je API-sleutel staat **versleuteld** (AES-256) in de site. Alleen met jouw wachtwoord kan hij
+  worden ontsleuteld; dat gebeurt in je browser. Het wachtwoord zelf staat nergens.
+- Omdat de versleutelde sleutel openbaar is, is een **lang wachtwoord** belangrijk
+  (bijv. vier losse woorden). Stel daarnaast in de Anthropic Console een **uitgavelimiet** in.
+- Wachtwoord wijzigen of sleutel vervangen: doe stap 3 en 4 opnieuw.
+- Uitloggen kan met de ⏻-knop rechtsboven.
+
+## Online zetten met eigen server (Render)
 
 Zo zet je Jarvis gratis online op [Render](https://render.com). Je krijgt dan een eigen
 https-adres zoals `https://jarvis-xxxx.onrender.com`, beveiligd met een wachtwoord.

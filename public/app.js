@@ -442,6 +442,7 @@
   // ---------------------------------------------------------------------------
   let streaming = false;
   let currentRequest = null;
+  let browserClient = null; // Anthropic-client in GitHub Pages-modus
 
   async function askAI(text) {
     state.history.push({ role: "user", content: text });
@@ -466,45 +467,68 @@
       }
     };
 
+    const handleEvent = (ev) => {
+      if (ev.type === "text") {
+        full += ev.text;
+        bodyEl.textContent = full;
+        caption.textContent = full.length > 220 ? "…" + full.slice(-220) : full;
+        $("log").scrollTop = $("log").scrollHeight;
+        flushSentences(false);
+      } else if (ev.type === "status") {
+        caption.textContent = ev.text;
+        if (!full) bodyEl.textContent = ev.text;
+      } else if (ev.type === "error") {
+        full += (full ? " " : "") + ev.text;
+        bodyEl.textContent = full;
+        sfx.error();
+      }
+    };
+    const signal = currentRequest.signal;
+
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          history: state.history,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          location: state.location?.name || null,
-        }),
-        signal: currentRequest.signal,
-      });
-      if (res.status === 401) { location.href = "/login"; return; }
-      if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
-      const reader = res.body.getReader();
-      const dec = new TextDecoder();
-      let buf = "";
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buf += dec.decode(value, { stream: true });
-        let nl;
-        while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
-          if (!line.trim()) continue;
-          const ev = JSON.parse(line);
-          if (ev.type === "text") {
-            full += ev.text;
-            bodyEl.textContent = full;
-            caption.textContent = full.length > 220 ? "…" + full.slice(-220) : full;
-            $("log").scrollTop = $("log").scrollHeight;
-            flushSentences(false);
-          } else if (ev.type === "status") {
-            caption.textContent = ev.text;
-            if (!full) bodyEl.textContent = ev.text;
-          } else if (ev.type === "error") {
-            full += (full ? " " : "") + ev.text;
-            bodyEl.textContent = full;
-            sfx.error();
+      if (state.serverMode) {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            history: state.history,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            location: state.location?.name || null,
+          }),
+          signal,
+        });
+        if (res.status === 401) { location.href = "/login"; return; }
+        if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          let nl;
+          while ((nl = buf.indexOf("\n")) >= 0) {
+            const line = buf.slice(0, nl); buf = buf.slice(nl + 1);
+            if (line.trim()) handleEvent(JSON.parse(line));
           }
+        }
+      } else {
+        // GitHub Pages-modus: rechtstreeks vanuit de browser met de ontgrendelde sleutel.
+        const brain = await import("./brain.mjs");
+        try {
+          await brain.streamReply(browserClient, {
+            history: state.history,
+            userName: state.userName,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            location: state.location?.name || null,
+            signal,
+            onText: (text) => handleEvent({ type: "text", text }),
+            onStatus: (text) => handleEvent({ type: "status", text }),
+          });
+        } catch (err) {
+          if (signal.aborted) { const e = new Error("afgebroken"); e.name = "AbortError"; throw e; }
+          console.error(err);
+          handleEvent({ type: "error", text: brain.errorMessage(err, state.userName) });
         }
       }
       streaming = false;
@@ -528,14 +552,22 @@
   }
 
   async function checkServer() {
-    try {
-      const r = await fetch("/api/status", { cache: "no-store" });
-      if (r.status === 401) { location.href = "/login"; return; }
-      const j = await r.json();
-      state.aiAvailable = !!j.ai;
-      if (j.userName) state.userName = j.userName;
-    } catch {
-      state.aiAvailable = false;
+    if (state.serverMode === false) {
+      state.aiAvailable = Boolean(browserClient);
+    } else {
+      try {
+        const r = await fetch("api/status", { cache: "no-store" });
+        if (r.status === 401) { location.href = "/login"; return; }
+        if (!r.ok) throw new Error("geen server");
+        const j = await r.json();
+        state.serverMode = true;
+        state.aiAvailable = !!j.ai;
+        if (j.userName) state.userName = j.userName;
+      } catch {
+        // Geen server (bijv. GitHub Pages): browsermodus
+        state.serverMode = false;
+        state.aiAvailable = Boolean(browserClient);
+      }
     }
     $("ai-indicator").classList.toggle("on", state.aiAvailable);
     $("ai-label").textContent = state.aiAvailable ? "AI-KERN ONLINE" : "AI-KERN OFFLINE";
@@ -848,8 +880,64 @@
     "> Alle systemen operationeel.",
   ];
 
+  // ---------------------------------------------------------------------------
+  // GitHub Pages-modus: sleutel ontgrendelen met wachtwoord
+  // ---------------------------------------------------------------------------
+  const CONFIG = window.JARVIS_CONFIG || null;
+  const UNLOCK_KEY = "unlocked";
+
+  async function makeBrowserClient(apiKey) {
+    const { default: Anthropic } = await import("./vendor/anthropic.mjs");
+    browserClient = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
+  }
+
+  function askPassword() {
+    return new Promise((resolve) => {
+      const gate = $("gate");
+      gate.hidden = false;
+      $("gate-pw").focus();
+      gate.onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = gate.querySelector("button");
+        btn.disabled = true; $("gate-err").textContent = "Identiteit verifiëren…";
+        try {
+          const { decryptSecret } = await import("./vault.mjs");
+          const apiKey = await decryptSecret(CONFIG.vault, $("gate-pw").value);
+          if ($("gate-remember").checked) store.set(UNLOCK_KEY, { apiKey, exp: Date.now() + 30 * 86400000 });
+          gate.hidden = true;
+          sfx.activate();
+          resolve(apiKey);
+        } catch {
+          await new Promise((r) => setTimeout(r, 800));
+          $("gate-err").textContent = "Toegang geweigerd. Onjuist wachtwoord.";
+          $("gate-pw").value = ""; $("gate-pw").focus();
+          ensureAudio(); sfx.error();
+        } finally {
+          btn.disabled = false;
+        }
+      };
+    });
+  }
+
+  async function unlockIfNeeded() {
+    await checkServer();
+    if (state.serverMode || !CONFIG?.vault) return;
+    if (CONFIG.userName) state.userName = CONFIG.userName;
+    const saved = store.get(UNLOCK_KEY, null);
+    const apiKey = saved && saved.exp > Date.now() ? saved.apiKey : await askPassword();
+    await makeBrowserClient(apiKey);
+    await checkServer();
+  }
+
+  function logout() {
+    if (state.serverMode) { location.href = "/logout"; return; }
+    store.set(UNLOCK_KEY, null);
+    location.reload();
+  }
+
   async function bootSequence() {
     const log = $("boot-log");
+    await unlockIfNeeded();
     const statusP = checkServer();
     for (let i = 0; i < BOOT_LINES.length; i++) {
       let line = BOOT_LINES[i];
@@ -876,6 +964,9 @@
     const intro = state.aiAvailable
       ? `${h}, ${state.userName}. Alle systemen zijn online. Waarmee kan ik u van dienst zijn?`
       : `${h}, ${state.userName}. Ik draai in basismodus; mijn AI-kern is niet verbonden. Ik kan u wel helpen met de tijd, het weer, timers en het openen van websites.`;
+    if (!state.aiAvailable && state.serverMode === false && !CONFIG?.vault) {
+      addLink("AI-kern nog niet ingesteld. Ga naar de installatiepagina:", "setup.html");
+    }
     onSpeechDone = () => { if (state.wakeEnabled) startRecognition(); };
     say(intro);
     if (!synth) { if (state.wakeEnabled) startRecognition(); }
@@ -883,6 +974,7 @@
 
   // Event-listeners
   $("boot-btn").onclick = activate;
+  $("logout-btn").onclick = logout;
   $("mic-btn").onclick = toggleMic;
   $("text-form").onsubmit = (e) => {
     e.preventDefault();
@@ -893,7 +985,7 @@
     runCommand(v);
   };
   document.addEventListener("keydown", (e) => {
-    if (e.code === "Space" && document.activeElement.tagName !== "INPUT" && !$("settings").open && $("boot").classList.contains("hide")) {
+    if (e.code === "Space" && document.activeElement.tagName !== "INPUT" && !$("settings").open && (!$("boot") || $("boot").classList.contains("hide"))) {
       e.preventDefault(); toggleMic();
     }
     if (e.key === "Escape") { stopSpeaking(); streaming = false; setMode("idle"); }

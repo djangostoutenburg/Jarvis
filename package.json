@@ -5,10 +5,16 @@
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "build:web": "esbuild scripts/sdk-entry.mjs --bundle --format=esm --platform=browser --minify --outfile=public/vendor/anthropic.mjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.13.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
   }
 }

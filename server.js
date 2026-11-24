@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
+import { MODEL, streamReply, errorMessage } from "./public/brain.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -16,7 +17,6 @@ if (fs.existsSync(path.join(__dirname, ".env"))) {
 
 const PORT = Number(process.env.PORT) || 3000;
 const USER_NAME = process.env.JARVIS_USER_NAME || "meneer";
-const MODEL = "claude-opus-5-5";
 const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 const client = hasKey ? new Anthropic() : null;
 
@@ -95,19 +95,6 @@ async function handleLogin(req, res) {
   sendLogin(res, "Toegang geweigerd. Onjuist wachtwoord.", 401);
 }
 
-const SYSTEM_PROMPT = `Je bent J.A.R.V.I.S., een geavanceerde, persoonlijke AI-butler. Je spreekt uitsluitend Nederlands.
-
-Persoonlijkheid:
-- Beleefd, kalm, licht formeel en droog-geestig, met een subtiel gevoel voor humor.
-- Je spreekt de gebruiker aan met "${USER_NAME}".
-- Loyaal, behulpzaam en efficiënt; je denkt een stap vooruit.
-
-Belangrijk — je antwoorden worden HARDOP voorgelezen door een spraaksynthesizer:
-- Houd antwoorden kort: meestal 1 tot 3 zinnen, tenzij er echt om uitleg wordt gevraagd.
-- Gebruik GEEN markdown, opsommingstekens, emoji, tabellen, codeblokken of URL's.
-- Schrijf getallen, tijden en eenheden zoals je ze uitspreekt als dat duidelijker is.
-- Gebruik de webzoekfunctie voor actuele zaken (nieuws, weer, sport, koersen) en vat de uitkomst bondig samen zonder bronnen voor te lezen.`;
-
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -148,23 +135,6 @@ function readBody(req) {
   });
 }
 
-// Alleen tekstberichten van de browser accepteren, afwisselend user/assistant.
-function sanitizeHistory(history) {
-  if (!Array.isArray(history)) return [];
-  const out = [];
-  for (const m of history.slice(-30)) {
-    if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
-    if (typeof m.content !== "string" || !m.content.trim()) continue;
-    if (out.length && out[out.length - 1].role === m.role) {
-      out[out.length - 1].content += "\n" + m.content;
-    } else {
-      out.push({ role: m.role, content: m.content.slice(0, 8000) });
-    }
-  }
-  while (out.length && out[0].role !== "user") out.shift();
-  return out;
-}
-
 async function handleChat(req, res) {
   if (!client) {
     res.writeHead(503, { "Content-Type": "application/json" });
@@ -178,76 +148,30 @@ async function handleChat(req, res) {
     res.writeHead(400).end();
     return;
   }
-  const messages = sanitizeHistory(body.history);
-  if (!messages.length || messages[messages.length - 1].role !== "user") {
-    res.writeHead(400).end();
-    return;
-  }
-
-  // Context (tijd/locatie) als los systeembericht achteraan, zodat de vaste
-  // systeemprompt cachebaar blijft.
-  const now = new Date().toLocaleString("nl-NL", {
-    timeZone: body.timeZone || "Europe/Amsterdam",
-    dateStyle: "full",
-    timeStyle: "short",
-  });
-  const contextNote = `Huidige datum en tijd bij de gebruiker: ${now}.` +
-    (body.location ? ` Locatie van de gebruiker (bij benadering): ${body.location}.` : "");
-  messages.push({ role: "system", content: contextNote });
 
   res.writeHead(200, {
     "Content-Type": "application/x-ndjson; charset=utf-8",
     "Cache-Control": "no-cache",
   });
   const send = (obj) => res.write(JSON.stringify(obj) + "\n");
-
   const controller = new AbortController();
   res.on("close", () => controller.abort());
 
   try {
-    let convo = messages;
-    for (let i = 0; i < 4; i++) {
-      const stream = client.beta.messages.stream(
-        {
-          model: MODEL,
-          max_tokens: 4000,
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-          output_config: { effort: "low" },
-          system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
-          tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],
-          messages: convo,
-        },
-        { signal: controller.signal },
-      );
-
-      for await (const event of stream) {
-        if (event.type === "content_block_start" && event.content_block.type === "server_tool_use") {
-          send({ type: "status", text: "Ik zoek het even op…" });
-        } else if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
-          send({ type: "text", text: event.delta.text });
-        }
-      }
-      const final = await stream.finalMessage();
-      if (final.stop_reason === "pause_turn") {
-        // Server-tool loop is gepauzeerd: hervatten met dezelfde context.
-        convo = [...messages.filter((m) => m.role !== "system"), { role: "assistant", content: final.content }];
-        continue;
-      }
-      if (final.stop_reason === "refusal") {
-        send({ type: "text", text: "Mijn excuses, daar kan ik u helaas niet mee helpen." });
-      }
-      break;
-    }
+    await streamReply(client, {
+      history: body.history,
+      userName: USER_NAME,
+      timeZone: body.timeZone,
+      location: body.location,
+      signal: controller.signal,
+      onText: (text) => send({ type: "text", text }),
+      onStatus: (text) => send({ type: "status", text }),
+    });
     send({ type: "done" });
   } catch (err) {
     if (controller.signal.aborted) return;
     console.error("Fout bij Claude-aanroep:", err?.status ?? "", err?.message ?? err);
-    let msg = "Er ging iets mis met mijn verbinding, " + USER_NAME + ".";
-    if (err instanceof Anthropic.AuthenticationError) msg = "Mijn API-sleutel lijkt ongeldig te zijn.";
-    else if (err instanceof Anthropic.RateLimitError) msg = "Ik krijg even te veel verzoeken. Probeer het zo nog eens.";
-    else if (err instanceof Anthropic.APIConnectionError) msg = "Ik kan de servers niet bereiken. Controleer de internetverbinding.";
-    send({ type: "error", text: msg });
+    send({ type: "error", text: err?.message === "Lege vraag" ? "Ik heb geen vraag ontvangen." : errorMessage(err, USER_NAME) });
   } finally {
     res.end();
   }
