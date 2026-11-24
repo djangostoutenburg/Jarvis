@@ -155,7 +155,10 @@
     stopRecognition();
     setMode("speaking");
     u.onboundary = () => { state.level = 1; };
+    let done = false;
     const finish = () => {
+      if (done) return; done = true;
+      clearTimeout(watchdog);
       speakQueue = Math.max(0, speakQueue - 1);
       if (speakQueue === 0 && !streaming) {
         setMode("idle");
@@ -166,6 +169,8 @@
     };
     u.onend = finish;
     u.onerror = finish;
+    // Sommige browsers (o.a. in claude.ai) melden het einde nooit: na de geschatte duur toch afsluiten.
+    const watchdog = setTimeout(finish, 2500 + t.length * 90 / (state.rate || 1));
     synth.speak(u);
   }
 
@@ -195,7 +200,8 @@
       if (st === "listening" && state.mode === "idle") setMode("listening");
       if (st === "idle") {
         if (state.mode === "listening") setMode("idle");
-        if (reason === "not_granted" || reason === "unavailable") {
+        if (reason === "not_granted" || reason === "unavailable" || reason === "upstream_error") {
+          transcriptEl.textContent = "Microfoon staat uit (" + reason + "). Typ je opdracht hieronder.";
           addLog("system", "Spraakherkenning is niet beschikbaar of niet toegestaan. Typ je opdrachten, of sta de microfoon toe via Machtigingen.");
         } else if (reason === "hidden") {
           transcriptEl.textContent = "Klik op de microfoon om weer te luisteren.";
@@ -208,15 +214,14 @@
     };
     dict.onPartial(({ text }) => {
       clearTimeout(dictTimer);
-      if (text && (state.awaitingCommand || manualListen || /jarvis|jervis/i.test(dictBuf + text))) {
-        transcriptEl.textContent = "“" + (dictBuf + " " + text).trim() + "”";
-      }
+      if (text) transcriptEl.textContent = "Gehoord: “" + (dictBuf + " " + text).trim() + "”";
       dictTimer = setTimeout(flush, 1300);
     });
     dict.onFinal(({ text }) => {
       clearTimeout(dictTimer);
       if (state.mode === "speaking" || state.mode === "thinking") { dictBuf = ""; return; } // eigen stem negeren
       dictBuf += text;
+      transcriptEl.textContent = "Gehoord: “" + dictBuf.trim() + "”";
       dictTimer = setTimeout(flush, 1100);
     });
     startRecognition();
@@ -225,8 +230,8 @@
   function initRecognition() {
     if (dict) { initDictation(); return; }
     if (state.serverMode === "artifact") {
-      addLog("system", "Spraakherkenning werkt hier niet (gebruik Chrome of Edge op een computer). Typ je opdrachten hieronder.");
-      transcriptEl.textContent = "Typ een opdracht hieronder.";
+      addLog("system", "Spraakherkenning werkt hier niet. Op een computer in Chrome of Edge (of de Claude-desktopapp) kun je wel praten. Typ je opdrachten hieronder.");
+      transcriptEl.textContent = "Praten werkt niet op dit apparaat. Typ je opdracht hieronder.";
       return;
     }
     if (!SR) {
@@ -263,14 +268,14 @@
         if (r.isFinal) final += r[0].transcript; else interim += r[0].transcript;
       }
       const shown = (final || interim).trim();
-      if (shown && (state.awaitingCommand || manualListen || /jarvis|jervis|jarvi/i.test(shown))) {
+      if (shown && (state.awaitingCommand || manualListen || WAKE_RE.test(shown))) {
         transcriptEl.textContent = "“" + shown + "”";
       }
       if (final.trim()) handleHeard(final.trim());
     };
   }
 
-  const WAKE_RE = /\b(hey |hé |hoi |oké |ok )?(jarvis|jervis|jarviz|jarvi|j\.a\.r\.v\.i\.s\.?)\b[,.!?]?\s*/i;
+  const WAKE_RE = /(?:^|\s|[,.!?])(?:hey |hé |hoi |oké |ok |hallo )?(?:j\.a\.r\.v\.i\.s\.?|d?[jcsh]h?[ae]r ?[vfw][iye]e?[sz]|jarvi|jervi)(?=$|[\s,.!?'’])[,.!?]?\s*/i;
 
   function handleHeard(text) {
     if (state.mode === "speaking" || state.mode === "thinking") return;
@@ -315,7 +320,7 @@
 
   function startRecognition() {
     if (dict) {
-      if (!dict.active()) dict.start({ language: "nl" }).catch(() => {});
+      if (!dict.active()) dict.start().catch(() => {});
       return;
     }
     if (!rec || recRunning) return;
